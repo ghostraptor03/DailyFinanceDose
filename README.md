@@ -11,9 +11,23 @@ A comprehensive Scrapy-based web scraper for collecting daily financial news fro
 
 ## Installation
 
-1. Clone the repo:
-   ```bash
-   git clone https://github.com/yourusername/financial_news_scraper.git
-   cd financial_news_scraper
-   pip install -r requirements.txt
-   python run_all_spiders.py
+# 1) Activate your venv
+.\.venv\Scripts\Activate.ps1
+
+# 2) (Re)install dependencies & patch libs
+pip install --upgrade pip
+pip install -r requirements.txt
+pip install legacy-cgi
+
+# 3) Ensure output & log folders exist
+mkdir logs
+mkdir output
+
+# 4) Verify Scrapy sees your spiders
+scrapy list
+
+# 5) Run a single‐site test and write JSON
+scrapy crawl reuters -o "output\reuters_test.json"
+
+# 6) When that succeeds, run them all
+python run_all_spiders.py
