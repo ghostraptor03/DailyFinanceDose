@@ -10,7 +10,8 @@ A comprehensive Scrapy-based web scraper for collecting daily financial news fro
 - JavaScript rendering via Playwright
 
 ## Installation
-
+root run py -3 -m venv .venv
+ to make the venv
 # 1) Activate your venv
 .\.venv\Scripts\Activate.ps1
 

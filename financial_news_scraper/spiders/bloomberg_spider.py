@@ -1,7 +1,10 @@
-import scrapy
-from .base_financial import BaseFinancialSpider
+# financial_news_scraper/spiders/bloomberg_spider.py
 
-class BloombergSpider(BaseFinancialSpider):
+import scrapy
+from datetime import datetime, timedelta
+from financial_news_scraper.items import NewsArticleItem
+
+class BloombergSpider(scrapy.Spider):
     name = 'bloomberg'
     allowed_domains = ['bloomberg.com']
     start_urls = [
@@ -10,21 +13,30 @@ class BloombergSpider(BaseFinancialSpider):
         'https://www.bloomberg.com/technology',
     ]
 
-    def start_requests(self):
-        for url in self.start_urls:
-            yield scrapy.Request(
-                url,
-                callback=self.parse,
-                meta={'playwright': True}
-            )
-
     def parse(self, response):
-        for link in response.css('a[data-module="Story"]::attr(href)').getall()[:15]:
-            yield response.follow(
-                link,
-                self.parse_article,
-                meta={'playwright': True}
-            )
+        links = response.css('a[data-module="Story"]::attr(href)').getall()
+        for href in links:
+            yield response.follow(href, self.parse_article)
 
     def parse_article(self, response):
-        yield self.build_item(response, 'Bloomberg')
+        item = NewsArticleItem()
+        item['source'] = 'Bloomberg'
+        item['url'] = response.url
+        item['title'] = response.css('h1[data-module="ArticleHeader"]::text').get(default='').strip()
+        item['author'] = response.css('.author-link::text').get(default='').strip()
+
+        pub_iso = response.css('time::attr(datetime)').get()
+        if not pub_iso:
+            return
+        item['published_date'] = pub_iso
+        pub = datetime.fromisoformat(pub_iso)
+        if pub < datetime.utcnow() - timedelta(hours=24):
+            return
+
+        item['content'] = ' '.join(response.css('.body-copy p::text').getall())
+        item['tags'] = response.css('.article__topics a::text').getall()
+        img = response.css('.main-image img::attr(src)').get()
+        if img:
+            item['image_url'] = response.urljoin(img)
+
+        yield item
