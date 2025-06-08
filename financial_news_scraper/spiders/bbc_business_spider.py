@@ -1,44 +1,54 @@
-# financial_news_scraper/spiders/bbc_business_spider.py
-
 import scrapy
-from datetime import datetime, timedelta
+import urllib.parse
 from financial_news_scraper.items import NewsArticleItem
+
+SCRAPERAPI_KEY = "049f0bf1e28d549e626e40d6d8c4df6f"
+
+def wrap_scraperapi(url):
+    return (
+        f"http://api.scraperapi.com/?api_key={SCRAPERAPI_KEY}"
+        f"&url={urllib.parse.quote(url)}&render=true"
+    )
 
 class BBCBusinessSpider(scrapy.Spider):
     name = 'bbc_business'
     allowed_domains = ['bbc.com']
-    start_urls = ['https://www.bbc.com/news/business']
+    start_urls = [
+        'https://www.bbc.com/news/business',
+    ]
+
+    def start_requests(self):
+        for url in self.start_urls:
+            yield scrapy.Request(
+                wrap_scraperapi(url),
+                callback=self.parse,
+                errback=self.errback_debug,
+                dont_filter=True,
+            )
 
     def parse(self, response):
         for href in response.css('a.gs-c-promo-heading::attr(href)').getall():
-            if href.startswith('/news/business'):
-                yield response.follow(href, self.parse_article)
+            yield scrapy.Request(
+                wrap_scraperapi(response.urljoin(href)),
+                callback=self.parse_article,
+                errback=self.errback_debug,
+                dont_filter=True,
+            )
 
     def parse_article(self, response):
         item = NewsArticleItem()
         item['source'] = 'BBC Business'
         item['url'] = response.url
         item['title'] = response.css('h1::text').get(default='').strip()
-        # BBC often omits author
-        item['author'] = response.css('.byline__name::text').get(default='').strip()
-
-        pub_iso = response.css('meta[property="article:published_time"]::attr(content)').get()
-        if not pub_iso:
-            return
-        item['published_date'] = pub_iso
-        pub = datetime.fromisoformat(pub_iso)
-        if pub < datetime.utcnow() - timedelta(hours=24):
-            return
-
-        paras = response.css('article .ssrcss-uf6wea-RichTextComponentWrapper p::text').getall()
-        item['content'] = ' '.join(p.strip() for p in paras if p.strip())
-
-        # BBC tags via section meta
-        section = response.css('meta[property="article:section"]::attr(content)').get()
-        item['tags'] = [section] if section else []
-
-        img = response.css('meta[property="og:image"]::attr(content)').get()
+        item['author'] = response.css('.ssrcss-1rv4g5u-Contributor::text').get(default='').strip()
+        item['published_date'] = response.css('time::attr(datetime)').get()
+        paragraphs = response.css('article p::text').getall()
+        item['content'] = ' '.join(p.strip() for p in paragraphs)
+        item['tags'] = []
+        img = response.css('figure img::attr(src)').get()
         if img:
-            item['image_url'] = img
-
+            item['image_url'] = response.urljoin(img)
         yield item
+
+    def errback_debug(self, failure):
+        self.logger.error(repr(failure))
