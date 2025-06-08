@@ -23,7 +23,8 @@ pip install legacy-cgi
 # 3) Ensure output & log folders exist
 mkdir logs
 mkdir output
-
+playwright install
+pip install python-dateutil
 # 4) Verify Scrapy sees your spiders
 scrapy list
 

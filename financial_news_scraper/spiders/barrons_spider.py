@@ -1,40 +1,55 @@
-# financial_news_scraper/spiders/barrons_spider.py
-
 import scrapy
-from datetime import datetime, timedelta
+import urllib.parse
 from financial_news_scraper.items import NewsArticleItem
+
+SCRAPERAPI_KEY = "049f0bf1e28d549e626e40d6d8c4df6f"
+
+def wrap_scraperapi(url):
+    return (
+        f"http://api.scraperapi.com/?api_key={SCRAPERAPI_KEY}"
+        f"&url={urllib.parse.quote(url)}&render=true"
+    )
 
 class BarronsSpider(scrapy.Spider):
     name = 'barrons'
     allowed_domains = ['barrons.com']
-    start_urls = ['https://www.barrons.com/']
+    start_urls = [
+        'https://www.barrons.com/markets',
+        'https://www.barrons.com/personal-finance',
+    ]
+
+    def start_requests(self):
+        for url in self.start_urls:
+            yield scrapy.Request(
+                wrap_scraperapi(url),
+                callback=self.parse,
+                errback=self.errback_debug,
+                dont_filter=True,
+            )
 
     def parse(self, response):
-        for href in response.css('h3.headline a::attr(href)').getall():
-            yield response.follow(href, self.parse_article)
+        for href in response.css('a[data-atom="article-link"]::attr(href)').getall():
+            yield scrapy.Request(
+                wrap_scraperapi(response.urljoin(href)),
+                callback=self.parse_article,
+                errback=self.errback_debug,
+                dont_filter=True,
+            )
 
     def parse_article(self, response):
         item = NewsArticleItem()
         item['source'] = 'Barrons'
         item['url'] = response.url
-        item['title'] = response.css('h1.headline::text').get(default='').strip()
-        item['author'] = response.css('span.author::text').get(default='').strip()
-
-        pub_iso = response.css('time::attr(datetime)').get()
-        if not pub_iso:
-            return
-        item['published_date'] = pub_iso
-        pub = datetime.fromisoformat(pub_iso)
-        if pub < datetime.utcnow() - timedelta(hours=24):
-            return
-
-        paragraphs = response.css('div.article-body p::text').getall()
-        clean = [p.strip() for p in paragraphs if p.strip()]
-        item['content'] = ' '.join(clean)
-        item['tags'] = response.css('a.tag::text').getall()
-
-        img = response.css('figure img::attr(src)').get()
+        item['title'] = response.css('h1::text').get(default='').strip()
+        item['author'] = response.css('.authorName::text').get(default='').strip()
+        item['published_date'] = response.css('time::attr(datetime)').get()
+        paragraphs = response.css('div.article-content p::text').getall()
+        item['content'] = ' '.join(p.strip() for p in paragraphs)
+        item['tags'] = response.css('.article__topics a::text').getall()
+        img = response.css('img.article-image::attr(src)').get()
         if img:
             item['image_url'] = response.urljoin(img)
-
         yield item
+
+    def errback_debug(self, failure):
+        self.logger.error(repr(failure))

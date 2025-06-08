@@ -21,7 +21,7 @@ SPIDER_MODULES = ['financial_news_scraper.spiders']
 NEWSPIDER_MODULE = 'financial_news_scraper.spiders'
 
 # Respect robots.txt
-ROBOTSTXT_OBEY = True
+ROBOTSTXT_OBEY = False
 
 # Throttling & concurrency
 DOWNLOAD_DELAY = 2
@@ -30,7 +30,7 @@ CONCURRENT_REQUESTS = 16
 CONCURRENT_REQUESTS_PER_DOMAIN = 4
 
 # Custom user-agent
-USER_AGENT = 'financial_news_scraper (+http://www.yourdomain.com)'
+USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
 
 # AutoThrottle
 AUTOTHROTTLE_ENABLED = True

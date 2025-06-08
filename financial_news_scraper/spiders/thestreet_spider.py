@@ -1,40 +1,55 @@
-# financial_news_scraper/spiders/thestreet_spider.py
-
 import scrapy
-from datetime import datetime, timedelta
+import urllib.parse
 from financial_news_scraper.items import NewsArticleItem
 
-class TheStreetSpider(scrapy.Spider):
-    name = 'thestreet'
-    allowed_domains = ['thestreet.com']
-    start_urls = ['https://www.thestreet.com/markets']
+SCRAPERAPI_KEY = "049f0bf1e28d549e626e40d6d8c4df6f"
+
+def wrap_scraperapi(url):
+    return (
+        f"http://api.scraperapi.com/?api_key={SCRAPERAPI_KEY}"
+        f"&url={urllib.parse.quote(url)}&render=true"
+    )
+
+class YahooFinanceSpider(scrapy.Spider):
+    name = 'yahoo_finance'
+    allowed_domains = ['finance.yahoo.com']
+    start_urls = [
+        'https://finance.yahoo.com/news/',
+        'https://finance.yahoo.com/topic/stock-market-news/',
+    ]
+
+    def start_requests(self):
+        for url in self.start_urls:
+            yield scrapy.Request(
+                wrap_scraperapi(url),
+                callback=self.parse,
+                errback=self.errback_debug,
+                dont_filter=True,
+            )
 
     def parse(self, response):
-        for href in response.css('a.article__title::attr(href)').getall():
-            yield response.follow(href, self.parse_article)
+        for href in response.css('h3 a::attr(href)').getall():
+            yield scrapy.Request(
+                wrap_scraperapi(response.urljoin(href)),
+                callback=self.parse_article,
+                errback=self.errback_debug,
+                dont_filter=True,
+            )
 
     def parse_article(self, response):
         item = NewsArticleItem()
-        item['source'] = 'TheStreet'
+        item['source'] = 'Yahoo Finance'
         item['url'] = response.url
-        item['title'] = response.css('h1::text').get(default='').strip()
-        item['author'] = response.css('.author-name::text').get(default='').strip()
-
-        pub_iso = response.css('time::attr(datetime)').get()
-        if not pub_iso:
-            return
-        item['published_date'] = pub_iso
-        pub = datetime.fromisoformat(pub_iso)
-        if pub < datetime.utcnow() - timedelta(hours=24):
-            return
-
-        paragraphs = response.css('.article-content p::text').getall()
-        clean = [p.strip() for p in paragraphs if p.strip()]
-        item['content'] = ' '.join(clean)
-        item['tags'] = response.css('.tags-list a::text').getall()
-
-        img = response.css('article img::attr(src)').get()
+        item['title'] = response.css('h1[data-test-locator="headline"]::text').get(default='').strip()
+        item['author'] = response.css('.caas-author-byline-collapse::text').get(default='').strip()
+        item['published_date'] = response.css('time::attr(datetime)').get()
+        paragraphs = response.css('.caas-body p::text').getall()
+        item['content'] = ' '.join(p.strip() for p in paragraphs)
+        item['tags'] = []
+        img = response.css('.caas-img img::attr(src)').get()
         if img:
             item['image_url'] = response.urljoin(img)
-
         yield item
+
+    def errback_debug(self, failure):
+        self.logger.error(repr(failure))

@@ -1,47 +1,66 @@
-# financial_news_scraper/spiders/reuters_spider.py
-
 import scrapy
-from datetime import datetime, timedelta
+import urllib.parse
 from financial_news_scraper.items import NewsArticleItem
+
+SCRAPERAPI_KEY = "049f0bf1e28d549e626e40d6d8c4df6f"
+
+def wrap_scraperapi(url):
+    return (
+        f"http://api.scraperapi.com/?api_key={SCRAPERAPI_KEY}"
+        f"&url={urllib.parse.quote(url)}&render=true"
+    )
 
 class ReutersSpider(scrapy.Spider):
     name = 'reuters'
     allowed_domains = ['reuters.com']
     start_urls = [
         'https://www.reuters.com/business/',
-        'https://www.reuters.com/markets/',
-        'https://www.reuters.com/technology/',
     ]
 
+    def start_requests(self):
+        for url in self.start_urls:
+            yield scrapy.Request(
+                wrap_scraperapi(url),
+                callback=self.parse,
+                errback=self.errback_debug,
+                dont_filter=True,
+            )
+
     def parse(self, response):
-        links = response.css('a[data-testid="Heading"]::attr(href)').getall()
-        for href in links:
-            yield response.follow(href, self.parse_article)
+        self.logger.info(f"Parsing section page: {response.url} (status {response.status})")
+        found_any = False
+        for article in response.css('article, div[data-testid="MediaStoryCard"]'):
+            link = article.css('a[data-testid="Heading"]::attr(href), a[data-testid="Link"]::attr(href), a::attr(href)').get()
+            if not link:
+                continue
+            found_any = True
+            full_url = response.urljoin(link)
+            yield scrapy.Request(
+                wrap_scraperapi(full_url),
+                callback=self.parse_article,
+                errback=self.errback_debug,
+                dont_filter=True,
+            )
+        if not found_any:
+            self.logger.warning("No articles found! Dumping HTML for debugging.")
+            with open("debug_reuters_section.html", "w", encoding="utf-8") as f:
+                f.write(response.text)
 
     def parse_article(self, response):
+        self.logger.info(f"Parsing article: {response.url} (status {response.status})")
         item = NewsArticleItem()
         item['source'] = 'Reuters'
         item['url'] = response.url
         item['title'] = response.css('h1[data-testid="Heading"]::text').get(default='').strip()
         item['author'] = response.css('span[data-testid="AuthorName"]::text').get(default='').strip()
-
-        # published_date + 24h filter
-        pub_iso = response.css('time::attr(datetime)').get()
-        if not pub_iso:
-            return
-        item['published_date'] = pub_iso
-        pub = datetime.fromisoformat(pub_iso)
-        if pub < datetime.utcnow() - timedelta(hours=24):
-            return
-
-        # full content
+        item['published_date'] = response.css('time::attr(datetime)').get()
         paragraphs = response.css('div[data-testid="paragraph"] p::text').getall()
         item['content'] = ' '.join(p.strip() for p in paragraphs)
         item['tags'] = response.css('a[data-testid="Link"]::text').getall()
-
-        # lead image
         img = response.css('img::attr(src)').get()
         if img:
             item['image_url'] = response.urljoin(img)
-
         yield item
+
+    def errback_debug(self, failure):
+        self.logger.error(repr(failure))
