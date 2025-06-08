@@ -19,8 +19,7 @@ class CNBCSpider(scrapy.Spider):
     name = 'cnbc'
     allowed_domains = ['cnbc.com']
     start_urls = [
-        'https://www.cnbc.com/finance/',
-        'https://www.cnbc.com/personal-finance/',
+        'https://www.cnbc.com/business/'
     ]
 
     def start_requests(self):

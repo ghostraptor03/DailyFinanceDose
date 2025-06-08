@@ -5,10 +5,15 @@ from financial_news_scraper.items import NewsArticleItem
 SCRAPERAPI_KEY = "049f0bf1e28d549e626e40d6d8c4df6f"
 
 def wrap_scraperapi(url):
-    return (
-        f"http://api.scraperapi.com/?api_key={SCRAPERAPI_KEY}"
-        f"&url={urllib.parse.quote(url)}&render=true"
-    )
+    params = {
+        "api_key": SCRAPERAPI_KEY,
+        "url": url,
+        "follow_redirect": "false",
+        "render": "true",
+        "retry_404": "true"
+    }
+    base = "http://api.scraperapi.com/"
+    return base + "?" + urllib.parse.urlencode(params)
 
 class EconomistFinanceSpider(scrapy.Spider):
     name = 'economist'
@@ -26,8 +31,10 @@ class EconomistFinanceSpider(scrapy.Spider):
 
     def parse(self, response):
         for href in response.css('a.teaser__link::attr(href)').getall():
+            if not href.startswith("http"):
+                href = response.urljoin(href)
             yield scrapy.Request(
-                wrap_scraperapi(response.urljoin(href)),
+                wrap_scraperapi(href),
                 callback=self.parse_article,
                 errback=self.errback_debug,
                 dont_filter=True,

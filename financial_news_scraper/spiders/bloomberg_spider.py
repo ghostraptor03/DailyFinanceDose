@@ -5,18 +5,23 @@ from financial_news_scraper.items import NewsArticleItem
 SCRAPERAPI_KEY = "049f0bf1e28d549e626e40d6d8c4df6f"
 
 def wrap_scraperapi(url):
-    return (
-        f"http://api.scraperapi.com/?api_key={SCRAPERAPI_KEY}"
-        f"&url={urllib.parse.quote(url)}&render=true"
-    )
+    params = {
+        "api_key": SCRAPERAPI_KEY,
+        "url": url,
+        "follow_redirect": "false",
+        "render": "true",
+        "retry_404": "true"
+    }
+    base = "http://api.scraperapi.com/"
+    return base + "?" + urllib.parse.urlencode(params)
 
 class BloombergSpider(scrapy.Spider):
     name = 'bloomberg'
     allowed_domains = ['bloomberg.com']
     start_urls = [
-        'https://www.bloomberg.com/markets',
-        'https://www.bloomberg.com/economics',
-        'https://www.bloomberg.com/technology',
+        
+        'https://www.bloomberg.com/economics'
+        
     ]
 
     def start_requests(self):
@@ -31,8 +36,10 @@ class BloombergSpider(scrapy.Spider):
     def parse(self, response):
         links = response.css('a[data-module="Story"]::attr(href)').getall()
         for href in links:
+            if not href.startswith("http"):
+                href = response.urljoin(href)
             yield scrapy.Request(
-                wrap_scraperapi(response.urljoin(href)),
+                wrap_scraperapi(href),
                 callback=self.parse_article,
                 errback=self.errback_debug,
                 dont_filter=True,

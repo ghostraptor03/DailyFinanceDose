@@ -5,16 +5,20 @@ from financial_news_scraper.items import NewsArticleItem
 SCRAPERAPI_KEY = "049f0bf1e28d549e626e40d6d8c4df6f"
 
 def wrap_scraperapi(url):
-    return (
-        f"http://api.scraperapi.com/?api_key={SCRAPERAPI_KEY}"
-        f"&url={urllib.parse.quote(url)}&render=true"
-    )
+    params = {
+        "api_key": SCRAPERAPI_KEY,
+        "url": url,
+        "follow_redirect": "false",
+        "render": "true",
+        "retry_404": "true"
+    }
+    base = "http://api.scraperapi.com/"
+    return base + "?" + urllib.parse.urlencode(params)
 
 class ForbesSpider(scrapy.Spider):
     name = 'forbes'
     allowed_domains = ['forbes.com']
     start_urls = [
-        'https://www.forbes.com/markets/',
         'https://www.forbes.com/money/',
     ]
 
@@ -29,8 +33,10 @@ class ForbesSpider(scrapy.Spider):
 
     def parse(self, response):
         for href in response.css('a[data-ga-track*="article"]::attr(href)').getall():
+            if not href.startswith("http"):
+                href = response.urljoin(href)
             yield scrapy.Request(
-                wrap_scraperapi(response.urljoin(href)),
+                wrap_scraperapi(href),
                 callback=self.parse_article,
                 errback=self.errback_debug,
                 dont_filter=True,

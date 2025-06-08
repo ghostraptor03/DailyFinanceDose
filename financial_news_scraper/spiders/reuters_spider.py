@@ -5,10 +5,15 @@ from financial_news_scraper.items import NewsArticleItem
 SCRAPERAPI_KEY = "049f0bf1e28d549e626e40d6d8c4df6f"
 
 def wrap_scraperapi(url):
-    return (
-        f"http://api.scraperapi.com/?api_key={SCRAPERAPI_KEY}"
-        f"&url={urllib.parse.quote(url)}&render=true"
-    )
+    params = {
+        "api_key": SCRAPERAPI_KEY,
+        "url": url,
+        "follow_redirect": "false",
+        "render": "true",
+        "retry_404": "true"
+    }
+    base = "http://api.scraperapi.com/"
+    return base + "?" + urllib.parse.urlencode(params)
 
 class ReutersSpider(scrapy.Spider):
     name = 'reuters'
@@ -33,10 +38,11 @@ class ReutersSpider(scrapy.Spider):
             link = article.css('a[data-testid="Heading"]::attr(href), a[data-testid="Link"]::attr(href), a::attr(href)').get()
             if not link:
                 continue
+            if not link.startswith("http"):
+                link = response.urljoin(link)
             found_any = True
-            full_url = response.urljoin(link)
             yield scrapy.Request(
-                wrap_scraperapi(full_url),
+                wrap_scraperapi(link),
                 callback=self.parse_article,
                 errback=self.errback_debug,
                 dont_filter=True,

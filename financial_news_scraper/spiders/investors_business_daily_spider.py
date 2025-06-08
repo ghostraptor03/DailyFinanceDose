@@ -5,17 +5,21 @@ from financial_news_scraper.items import NewsArticleItem
 SCRAPERAPI_KEY = "049f0bf1e28d549e626e40d6d8c4df6f"
 
 def wrap_scraperapi(url):
-    return (
-        f"http://api.scraperapi.com/?api_key={SCRAPERAPI_KEY}"
-        f"&url={urllib.parse.quote(url)}&render=true"
-    )
+    params = {
+        "api_key": SCRAPERAPI_KEY,
+        "url": url,
+        "follow_redirect": "false",
+        "render": "true",
+        "retry_404": "true"
+    }
+    base = "http://api.scraperapi.com/"
+    return base + "?" + urllib.parse.urlencode(params)
 
 class InvestorsBusinessDailySpider(scrapy.Spider):
     name = 'investors_business_daily'
     allowed_domains = ['investors.com']
     start_urls = [
         'https://www.investors.com/news/',
-        'https://www.investors.com/market-trend/stock-market-today/',
     ]
 
     def start_requests(self):
@@ -29,8 +33,10 @@ class InvestorsBusinessDailySpider(scrapy.Spider):
 
     def parse(self, response):
         for href in response.css('a.headline a::attr(href)').getall():
+            if not href.startswith("http"):
+                href = response.urljoin(href)
             yield scrapy.Request(
-                wrap_scraperapi(response.urljoin(href)),
+                wrap_scraperapi(href),
                 callback=self.parse_article,
                 errback=self.errback_debug,
                 dont_filter=True,
@@ -41,12 +47,12 @@ class InvestorsBusinessDailySpider(scrapy.Spider):
         item['source'] = 'Investors Business Daily'
         item['url'] = response.url
         item['title'] = response.css('h1::text').get(default='').strip()
-        item['author'] = response.css('.author-name::text').get(default='').strip()
+        item['author'] = response.css('.author__name::text').get(default='').strip()
         item['published_date'] = response.css('time::attr(datetime)').get()
-        paragraphs = response.css('div.article-content p::text').getall()
+        paragraphs = response.css('div.article__body p::text').getall()
         item['content'] = ' '.join(p.strip() for p in paragraphs)
-        item['tags'] = response.css('.tags a::text').getall()
-        img = response.css('img.article-image::attr(src)').get()
+        item['tags'] = response.css('.tags-list a::text').getall()
+        img = response.css('img.article__image::attr(src)').get()
         if img:
             item['image_url'] = response.urljoin(img)
         yield item

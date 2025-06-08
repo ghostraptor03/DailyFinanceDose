@@ -5,18 +5,20 @@ from financial_news_scraper.items import NewsArticleItem
 SCRAPERAPI_KEY = "049f0bf1e28d549e626e40d6d8c4df6f"
 
 def wrap_scraperapi(url):
-    return (
-        f"http://api.scraperapi.com/?api_key={SCRAPERAPI_KEY}"
-        f"&url={urllib.parse.quote(url)}&render=true"
-    )
+    params = {
+        "api_key": SCRAPERAPI_KEY,
+        "url": url,
+        "follow_redirect": "false",
+        "render": "true",
+        "retry_404": "true"
+    }
+    base = "http://api.scraperapi.com/"
+    return base + "?" + urllib.parse.urlencode(params)
 
-class BarronsSpider(scrapy.Spider):
-    name = 'barrons'
-    allowed_domains = ['barrons.com']
-    start_urls = [
-        'https://www.barrons.com/markets',
-        'https://www.barrons.com/personal-finance',
-    ]
+class BusinessInsiderSpider(scrapy.Spider):
+    name = 'business_insider'
+    allowed_domains = ['businessinsider.com']
+    start_urls = ['https://www.businessinsider.com/finance']
 
     def start_requests(self):
         for url in self.start_urls:
@@ -28,9 +30,11 @@ class BarronsSpider(scrapy.Spider):
             )
 
     def parse(self, response):
-        for href in response.css('a[data-atom="article-link"]::attr(href)').getall():
+        for href in response.css('a.js-article-link::attr(href)').getall():
+            if not href.startswith("http"):
+                href = response.urljoin(href)
             yield scrapy.Request(
-                wrap_scraperapi(response.urljoin(href)),
+                wrap_scraperapi(href),
                 callback=self.parse_article,
                 errback=self.errback_debug,
                 dont_filter=True,
@@ -38,15 +42,17 @@ class BarronsSpider(scrapy.Spider):
 
     def parse_article(self, response):
         item = NewsArticleItem()
-        item['source'] = 'Barrons'
+        item['source'] = 'Business Insider'
         item['url'] = response.url
         item['title'] = response.css('h1::text').get(default='').strip()
-        item['author'] = response.css('.authorName::text').get(default='').strip()
+        item['author'] = response.css('.byline__author-link::text').get(default='').strip()
+        paragraphs = response.css('article p::text').getall()
+        clean_pars = [p.strip() for p in paragraphs if p.strip()]
+        item['summary'] = clean_pars[0] if clean_pars else ''
+        item['content'] = ' '.join(clean_pars)
         item['published_date'] = response.css('time::attr(datetime)').get()
-        paragraphs = response.css('div.article-content p::text').getall()
-        item['content'] = ' '.join(p.strip() for p in paragraphs)
-        item['tags'] = response.css('.article__topics a::text').getall()
-        img = response.css('img.article-image::attr(src)').get()
+        item['tags'] = response.css('.tags-list a::text').getall()
+        img = response.css('figure img::attr(src)').get()
         if img:
             item['image_url'] = response.urljoin(img)
         yield item
