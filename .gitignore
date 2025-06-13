@@ -1,1 +1,27 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Crawler output
 *.log
+*.csv
+*.json
+*.jl
+
+# Lambda build artifacts
+*.zip
+*.egg-info/
+dist/
+build/
+
+# Docker
+*.tar
+
+# System files
+.DS_Store
+.env
+*.swp
+
+# AWS credentials (never commit!)
+.aws/
