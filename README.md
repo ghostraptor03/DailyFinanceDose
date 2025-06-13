@@ -106,12 +106,6 @@ docker build -t lambda-spiders .
 
 ---
 
-## **License**
-
-MIT
-
----
-
 ## **Contact**
 
 For questions or improvements, open an issue or pull request!
