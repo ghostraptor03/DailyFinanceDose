@@ -2,7 +2,7 @@ import scrapy
 import urllib.parse
 from financial_news_scraper.items import NewsArticleItem
 
-SCRAPERAPI_KEY = "049f0bf1e28d549e626e40d6d8c4df6f"
+SCRAPERAPI_KEY = ""
 
 def wrap_scraperapi(url):
     params = {
